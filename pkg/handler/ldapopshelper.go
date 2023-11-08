@@ -88,6 +88,8 @@ func (l LDAPOpsHelper) Bind(h LDAPOpsHandler, bindDN, bindSimplePw string, conn 
 	untouchedBindSimplePw := bindSimplePw
 
 	// Test OTP if is exists
+	// TODO: For validotp option, add swith to the configuration.
+	h.GetLog().Debug().Str("OTPSecret", user.OTPSecret).Msg("User OTPSecret string")
 	if len(user.OTPSecret) > 0 && !validotp {
 		if len(bindSimplePw) > 6 {
 			otp := bindSimplePw[len(bindSimplePw)-6:]
@@ -95,6 +97,8 @@ func (l LDAPOpsHelper) Bind(h LDAPOpsHandler, bindDN, bindSimplePw string, conn 
 
 			validotp = totp.Validate(otp, user.OTPSecret)
 		}
+	} else {
+		validotp = true
 	}
 
 	// finally, validate user's pw
@@ -140,6 +144,7 @@ func (l LDAPOpsHelper) Bind(h LDAPOpsHandler, bindDN, bindSimplePw string, conn 
 	}
 
 	// Then ensure the OTP is valid before checking
+	h.GetLog().Debug().Bool("validotp", validotp).Msg("OTP token validation results")
 	if !validotp {
 		h.GetLog().Info().Str("binddn", bindDN).Str("src", conn.RemoteAddr().String()).Msg("invalid OTP token")
 		return ldap.LDAPResultInvalidCredentials, nil
