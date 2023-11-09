@@ -25,7 +25,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-const programName = "glauth"
+const programName = "gldap"
 
 var usage = `glauth: securely expose your LDAP for external auth
 
