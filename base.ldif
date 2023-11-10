@@ -1,15 +1,16 @@
-
-dn: dc=gldap,dc=com
+dn: uid=test,ou=superheros,dc=gldap,dc=com
 objectClass: top
-objectClass: dcObject
-objectClass: organization
-o: Gldap Inc.
-dc: gldap
-
-dn: ou=Users,dc=gldap,dc=com
-objectClass: organizationalUnit
-ou: Users
-
-dn: ou=Groups,dc=gldap,dc=com
-objectClass: organizationalUnit
-ou: Group
+objectClass: person
+objectClass: organizationalPerson
+objectClass: inetOrgPerson
+cn: test
+uid: test
+givenName: test
+sn: tt
+mail: test@example.com
+loginShell: /bin/bash
+homeDirectory: /home/test
+userPassword: {SHA}6478579e37aff45f013e14eeb30b3cc56c72ccdc310123bcdf53e0333e3f416a
+gidNumber: 5501
+memberOf: ou=superheros,ou=groups,dc=gldap,dc=com
+memberOf: ou=civilians,ou=groups,dc=gldap,dc=com
