@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -90,6 +91,9 @@ func main() {
 	log = logging.InitLogging(activeConfig.Debug, activeConfig.Syslog, activeConfig.StructuredLog)
 
 	if !checkConfig {
+		logging.InitSlogDefault(cfg.Debug)
+		slog.Debug("slog Debug enabled")
+		// slog.Info("slog Info")
 		if cfg.Debug {
 			log.Info().Msg("Debugging enabled")
 		}

@@ -2,9 +2,11 @@ package handler
 
 import (
 	"bufio"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -648,6 +650,7 @@ func (l LDAPOpsHelper) findUser(h LDAPOpsHandler, bindDN string, checkGroup bool
 }
 
 func (l LDAPOpsHelper) checkCapability(user config.User, action string, objects []string) bool {
+	slog.DebugContext(context.Background(), "checkCapability", "userName", user, "userCapabilities", user.Capabilities, "action", action, "objects", objects)
 	for _, capability := range user.Capabilities {
 		if capability.Action == action {
 			for _, object := range objects {
