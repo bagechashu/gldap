@@ -22,11 +22,9 @@ import (
 	docopt "github.com/docopt/docopt-go"
 	"github.com/fsnotify/fsnotify"
 	"github.com/jinzhu/copier"
-
-	"github.com/rs/zerolog"
 )
 
-const programName = "gldap"
+// const programName = "gldap"
 
 var usage = `glauth: securely expose your LDAP for external auth
 
@@ -51,7 +49,6 @@ Options:
 `
 
 var (
-	log  zerolog.Logger
 	args map[string]interface{}
 
 	activeConfig = &config.Config{}
@@ -82,27 +79,17 @@ func main() {
 	if checkConfig {
 		fmt.Println("Config file seems ok (but I am not checking much at this time)")
 		return
-	}
-
-	if err := copier.Copy(activeConfig, cfg); err != nil {
-		log.Info().Err(err).Msg("Could not save reloaded config. Holding on to old config")
-	}
-
-	log = logging.InitLogging(activeConfig.Debug, activeConfig.Syslog, activeConfig.StructuredLog)
-
-	if !checkConfig {
+	} else {
 		logging.InitSlogDefault(cfg.Debug)
 		slog.Debug("slog Debug enabled")
 		// slog.Info("slog Info")
-		if cfg.Debug {
-			log.Info().Msg("Debugging enabled")
-		}
-		if cfg.Syslog {
-			log.Info().Msg("Syslog enabled")
-		}
 	}
 
-	log.Info().Msg("AP start")
+	if err := copier.Copy(activeConfig, cfg); err != nil {
+		slog.Error("Could not save reloaded config. Holding on to old config", err)
+	}
+
+	slog.Info("AP start")
 
 	startService()
 }
@@ -113,7 +100,7 @@ func startService() {
 
 	// web API
 	if activeConfig.API.Enabled {
-		log.Info().Msg("Web API enabled")
+		slog.Info("Web API enabled")
 
 		if activeConfig.API.Internals {
 			statsviz.Register(
@@ -124,30 +111,28 @@ func startService() {
 		}
 
 		go frontend.RunAPI(
-			frontend.Logger(log),
 			frontend.Config(&activeConfig.API),
 		)
 	}
 
-	monitor := monitoring.NewMonitor(&log)
+	monitor := monitoring.NewMonitor()
 
 	startConfigWatcher()
 
 	s, err := server.NewServer(
-		server.Logger(log),
 		server.Config(activeConfig),
 		server.Monitor(monitor),
 	)
 
 	if err != nil {
-		log.Error().Err(err).Msg("could not create server")
+		slog.Error("could not create server", err)
 		os.Exit(1)
 	}
 
 	if activeConfig.LDAP.Enabled {
 		go func() {
 			if err := s.ListenAndServe(); err != nil {
-				log.Error().Err(err).Msg("could not start LDAP server")
+				slog.Error("could not start LDAP server", err)
 				os.Exit(1)
 			}
 		}()
@@ -156,7 +141,7 @@ func startService() {
 	if activeConfig.LDAPS.Enabled {
 		go func() {
 			if err := s.ListenAndServeTLS(); err != nil {
-				log.Error().Err(err).Msg("could not start LDAPS server")
+				slog.Error("could not start LDAPS server", err)
 				os.Exit(1)
 			}
 		}()
@@ -175,7 +160,7 @@ func startService() {
 	// Optionally, you could run srv.Shutdown in a goroutine and block on
 	// <-ctx.Done() if your application should wait for other services
 	// to finalize based on context cancellation.
-	log.Info().Msg("AP exit")
+	slog.Info("AP exit")
 	os.Exit(0)
 }
 
@@ -187,7 +172,7 @@ func startConfigWatcher() {
 
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		log.Error().Err(err).Msg("could not start config-watcher")
+		slog.Error("could not start config-watcher", err)
 		return
 	}
 
@@ -197,20 +182,20 @@ func startConfigWatcher() {
 		for {
 			select {
 			case event := <-watcher.Events:
-				log.Info().Str("e", event.Op.String()).Msg("watcher got event")
+				slog.Info("watcher got event", "e", event.Op.String())
 				if event.Op&fsnotify.Write == fsnotify.Write {
 					isChanged = true
 				} else if event.Op&fsnotify.Remove == fsnotify.Remove { // vim edit file with rename/remove
 					isChanged, isRemoved = true, true
 				}
 			case err := <-watcher.Errors:
-				log.Error().Err(err).Msg("watcher error")
+				slog.Error("watcher error", err)
 			case <-ticker.C:
 				// wakeup, try finding removed config
 			}
 			if _, err := os.Stat(configFileLocation); !os.IsNotExist(err) && (isRemoved || isChanged) {
 				if isRemoved {
-					log.Info().Str("file", configFileLocation).Msg("rewatching config")
+					slog.Info("rewatching config", "file", configFileLocation)
 					watcher.Add(configFileLocation) // overwrite
 					isChanged, isRemoved = true, false
 				}
@@ -219,12 +204,12 @@ func startConfigWatcher() {
 					cfg, err := toml.NewConfig(false, configFileLocation, args)
 
 					if err != nil {
-						log.Info().Err(err).Msg("Could not reload config. Holding on to old config")
+						slog.Error("Could not reload config. Holding on to old config", err)
 					} else {
-						log.Info().Msg("Config was reloaded")
+						slog.Info("Config was reloaded")
 
 						if err := copier.Copy(activeConfig, cfg); err != nil {
-							log.Info().Err(err).Msg("Could not save reloaded config. Holding on to old config")
+							slog.Error("Could not save reloaded config. Holding on to old config", err)
 						}
 					}
 					isChanged = false

@@ -2,13 +2,12 @@ package handler
 
 import (
 	"fmt"
+	"log/slog"
 	"net"
 	"regexp"
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/rs/zerolog"
 
 	"github.com/bagechashu/gldap/internal/monitoring"
 	"github.com/bagechashu/gldap/pkg/config"
@@ -18,7 +17,6 @@ import (
 
 type configHandler struct {
 	backend    config.Backend
-	log        *zerolog.Logger
 	cfg        *config.Config
 	ldohelper  LDAPOpsHelper
 	attmatcher *regexp.Regexp
@@ -32,7 +30,6 @@ func NewConfigHandler(opts ...Option) Handler {
 
 	handler := configHandler{
 		backend:    options.Backend,
-		log:        options.Logger,
 		cfg:        options.Config, // TODO only used to access Users and Groups, move that to dedicated options
 		ldohelper:  options.LDAPHelper,
 		attmatcher: configattributematcher,
@@ -44,9 +41,7 @@ func NewConfigHandler(opts ...Option) Handler {
 func (h configHandler) GetBackend() config.Backend {
 	return h.backend
 }
-func (h configHandler) GetLog() *zerolog.Logger {
-	return h.log
-}
+
 func (h configHandler) GetCfg() *config.Config {
 	return h.cfg
 }
@@ -222,7 +217,7 @@ func (h configHandler) FindPosixAccounts(hierarchy string) (entrylist []*ldap.En
 					}
 					attrs = append(attrs, &ldap.EntryAttribute{Name: key, Values: values})
 				default:
-					h.log.Warn().Str("key", key).Interface("value", attr).Msg("Unable to map custom attribute")
+					slog.Warn("Unable to map custom attribute", "key", key, "value", attr)
 				}
 			}
 		}
@@ -333,7 +328,7 @@ func (h configHandler) getGroupMemberIDs(gid int) []string {
 		if gid == g.GIDNumber {
 			for _, includegroupid := range g.IncludeGroups {
 				if includegroupid == gid {
-					h.log.Warn().Int("groupid", includegroupid).Msg("Ignoring myself as included group")
+					slog.Warn("Ignoring myself as included group", "groupid", includegroupid)
 				} else {
 					includegroupmemberids := h.getGroupMemberIDs(includegroupid)
 

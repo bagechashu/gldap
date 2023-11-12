@@ -5,14 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
-
-	"github.com/rs/zerolog"
 
 	"github.com/bagechashu/gldap/pkg/config"
 	"github.com/bagechashu/gldap/pkg/stats"
@@ -39,7 +38,6 @@ type database struct {
 
 type databaseHandler struct {
 	backend    config.Backend
-	log        *zerolog.Logger
 	cfg        *config.Config
 	sqlBackend SqlBackend
 	database   database
@@ -55,12 +53,12 @@ func NewDatabaseHandler(sqlBackend SqlBackend, opts ...Option) Handler {
 
 	db, err := sql.Open(sqlBackend.GetDriverName(), options.Backend.Database)
 	if err != nil {
-		options.Logger.Error().Err(err).Msg(fmt.Sprintf("unable to open SQL database named '%s'", options.Backend.Database))
+		slog.Error(fmt.Sprintf("unable to open SQL database named '%s'", options.Backend.Database), err)
 		os.Exit(1)
 	}
 	err = db.Ping()
 	if err != nil {
-		options.Logger.Error().Err(err).Msg(fmt.Sprintf("unable to communicate with SQL database error: %s", options.Backend.Database))
+		slog.Error(fmt.Sprintf("unable to communicate with SQL database error: %s", options.Backend.Database), err)
 		os.Exit(1)
 	}
 
@@ -71,7 +69,6 @@ func NewDatabaseHandler(sqlBackend SqlBackend, opts ...Option) Handler {
 
 	handler := databaseHandler{
 		backend:    options.Backend,
-		log:        options.Logger,
 		cfg:        options.Config,
 		sqlBackend: sqlBackend,
 		database:   dbInfo,
@@ -82,7 +79,7 @@ func NewDatabaseHandler(sqlBackend SqlBackend, opts ...Option) Handler {
 	sqlBackend.CreateSchema(db)
 	sqlBackend.MigrateSchema(db, ColumnExists)
 
-	options.Logger.Debug().Msg("Database (" + sqlBackend.GetDriverName() + "::" + options.Backend.Database + ") : Ready")
+	slog.Debug("Database (" + sqlBackend.GetDriverName() + "::" + options.Backend.Database + ") : Ready")
 
 	return handler
 }
@@ -96,9 +93,6 @@ func ColumnExists(db *sql.DB, tableName string, columnName string) bool {
 
 func (h databaseHandler) GetBackend() config.Backend {
 	return h.backend
-}
-func (h databaseHandler) GetLog() *zerolog.Logger {
-	return h.log
 }
 func (h databaseHandler) GetCfg() *config.Config {
 	return h.cfg
@@ -238,7 +232,7 @@ func (h databaseHandler) FindPosixAccounts(hierarchy string) (entrylist []*ldap.
 					}
 					entry.Attributes = append(entry.Attributes, &ldap.EntryAttribute{Name: key, Values: values})
 				default:
-					h.log.Warn().Str("key", key).Interface("value", attr).Msg("Unable to map custom attribute")
+					slog.Warn("Unable to map custom attribute", "key", key, "value", attr)
 				}
 			}
 		}
@@ -437,7 +431,7 @@ func (h databaseHandler) getGroupMemberIDs(gid int) []string {
 		if gid == g.GIDNumber {
 			for _, includegroupid := range g.IncludeGroups {
 				if includegroupid == gid {
-					h.log.Warn().Msg(fmt.Sprintf("Group: %d - Ignoring myself as included group", includegroupid))
+					slog.Warn(fmt.Sprintf("Group: %d - Ignoring myself as included group", includegroupid))
 				} else {
 					includegroupmemberids := h.getGroupMemberIDs(includegroupid)
 

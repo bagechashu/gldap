@@ -3,8 +3,6 @@ package handler
 import (
 	"context"
 
-	"github.com/rs/zerolog"
-
 	"github.com/bagechashu/gldap/internal/monitoring"
 	"github.com/bagechashu/gldap/pkg/config"
 )
@@ -16,7 +14,6 @@ type Option func(o *Options)
 type Options struct {
 	Backend    config.Backend
 	Handlers   HandlerWrapper
-	Logger     *zerolog.Logger
 	Config     *config.Config
 	Context    *context.Context
 	Helper     Handler
@@ -57,13 +54,6 @@ func Backend(val config.Backend) Option {
 func Handlers(val HandlerWrapper) Option {
 	return func(o *Options) {
 		o.Handlers = val
-	}
-}
-
-// Logger provides a function to set the logger option.
-func Logger(val *zerolog.Logger) Option {
-	return func(o *Options) {
-		o.Logger = val
 	}
 }
 

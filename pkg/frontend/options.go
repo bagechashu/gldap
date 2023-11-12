@@ -3,8 +3,6 @@ package frontend
 import (
 	"context"
 
-	"github.com/rs/zerolog"
-
 	"github.com/bagechashu/gldap/pkg/config"
 )
 
@@ -13,7 +11,6 @@ type Option func(o *Options)
 
 // Options defines the available options for this package.
 type Options struct {
-	Logger  zerolog.Logger
 	Config  *config.API
 	Context context.Context
 }
@@ -27,13 +24,6 @@ func newOptions(opts ...Option) Options {
 	}
 
 	return opt
-}
-
-// Logger provides a function to set the logger option.
-func Logger(val zerolog.Logger) Option {
-	return func(o *Options) {
-		o.Logger = val
-	}
 }
 
 // Config provides a function to set the config option.

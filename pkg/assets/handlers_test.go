@@ -6,10 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
-
-	"github.com/rs/zerolog"
 )
 
 // TestAPI is a small test to make sure that behavior didn't change for the
@@ -88,8 +85,7 @@ func TestAPIAssets(t *testing.T) {
 	}
 
 	mux := http.NewServeMux()
-	log := zerolog.New(os.Stdout).Level(zerolog.InfoLevel)
-	NewAPI(log).RegisterEndpoints(mux)
+	NewAPI().RegisterEndpoints(mux)
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 	for _, tc := range tt {

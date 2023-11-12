@@ -2,6 +2,7 @@ package frontend
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/bagechashu/gldap/internal/monitoring"
@@ -11,30 +12,29 @@ import (
 // RunAPI provides a basic REST API
 func RunAPI(opts ...Option) {
 	options := newOptions(opts...)
-	log := options.Logger
 	cfg := options.Config
 
 	router := http.DefaultServeMux
 
-	assets.NewAPI(log).RegisterEndpoints(router)
-	monitoring.NewAPI(log).RegisterEndpoints(router)
+	assets.NewAPI().RegisterEndpoints(router)
+	monitoring.NewAPI().RegisterEndpoints(router)
 
 	if cfg.TLS {
-		log.Info().Str("address", cfg.Listen).Msg("Starting HTTPS server")
+		slog.Info("Starting HTTPS server", "address", cfg.Listen)
 
 		monitoring.NewCollector(fmt.Sprintf("https://%s/debug/vars", cfg.Listen))
 		if err := http.ListenAndServeTLS(cfg.Listen, cfg.Cert, cfg.Key, nil); err != nil {
-			log.Error().Err(err).Msg("error starting HTTPS server")
+			slog.Error("error starting HTTPS server", err)
 		}
 
 		return
 	}
 
-	log.Info().Str("address", cfg.Listen).Msg("Starting HTTP server")
+	slog.Info("Starting HTTP server", "address", cfg.Listen)
 	monitoring.NewCollector(fmt.Sprintf("http://%s/debug/vars", cfg.Listen))
 
 	if err := http.ListenAndServe(cfg.Listen, nil); err != nil {
-		log.Error().Err(err).Msg("error starting HTTP server")
+		slog.Error("error starting HTTP server", err)
 	}
 
 }

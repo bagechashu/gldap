@@ -3,6 +3,7 @@ package toml
 import (
 	"bytes"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/bagechashu/gldap/pkg/config"
-	"github.com/rs/zerolog/log"
 	"gopkg.in/amz.v3/aws"
 	"gopkg.in/amz.v3/s3"
 )
@@ -193,7 +193,7 @@ func usersCustomAttributes(location string, config *config.Config) {
 	md, err := toml.DecodeFile(location, c)
 
 	if err != nil {
-		log.Error().Err(err).Msg("issues parsing users...keep going")
+		slog.Error("issues parsing users...keep going", err)
 		return
 	}
 
@@ -308,7 +308,7 @@ func mergeConfigs(config1 interface{}, config2 interface{}) error {
 		case nil:
 			//fmt.Println(strings.Repeat("     ", depth), " - Nil")
 		default:
-			log.Info().Str("type", reflect.TypeOf(element2).String()).Msg("Unknown element type found in configuration file. Ignoring.")
+			slog.Info("Unknown element type found in configuration file. Ignoring.", "type", reflect.TypeOf(element2).String())
 		}
 		return nil
 	}
@@ -350,7 +350,7 @@ func handleLegacyConfig(cfg *config.Config) (*config.Config, error) {
 
 	if len(cfg.Frontend.Listen) > 0 {
 		// We're going with old format - parse it into new
-		log.Info().Msg("Config [frontend] is deprecated - please move to [ldap] and [ldaps] as-per documentation")
+		slog.Info("Config [frontend] is deprecated - please move to [ldap] and [ldaps] as-per documentation")
 
 		cfg.LDAP.Enabled = !cfg.Frontend.TLS
 		cfg.LDAPS.Enabled = cfg.Frontend.TLS
@@ -414,13 +414,13 @@ func validateConfig(cfg *config.Config) (*config.Config, error) {
 	for _, user := range cfg.Users {
 		if user.UnixID != 0 {
 			user.UIDNumber = user.UnixID
-			log.Info().Msg(fmt.Sprintf("User '%s': 'unixid' is deprecated - please move to 'uidnumber' as per documentation", user.Name))
+			slog.Info(fmt.Sprintf("User '%s': 'unixid' is deprecated - please move to 'uidnumber' as per documentation", user.Name))
 		}
 	}
 	for _, group := range cfg.Groups {
 		if group.UnixID != 0 {
 			group.GIDNumber = group.UnixID
-			log.Info().Msg(fmt.Sprintf("Group '%s': 'unixid' is deprecated - please move to 'gidnumber' as per documentation", group.Name))
+			slog.Info(fmt.Sprintf("Group '%s': 'unixid' is deprecated - please move to 'gidnumber' as per documentation", group.Name))
 		}
 	}
 

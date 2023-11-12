@@ -6,12 +6,10 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
-	"github.com/rs/zerolog"
 )
 
 func TestNewMonitorImplementsInterface(t *testing.T) {
-	logger := zerolog.Nop()
-	m := NewMonitor(&logger)
+	m := NewMonitor()
 
 	i := reflect.TypeOf((*MonitorInterface)(nil)).Elem()
 
@@ -21,8 +19,7 @@ func TestNewMonitorImplementsInterface(t *testing.T) {
 }
 
 func TestMonitorSetLDAPMetricSucceeds(t *testing.T) {
-	logger := zerolog.Nop()
-	m := NewMonitor(&logger)
+	m := NewMonitor()
 
 	labels := map[string]string{"type": "test"}
 	m.SetLDAPMetric(labels, float64(10))
@@ -36,8 +33,7 @@ func TestMonitorSetLDAPMetricSucceeds(t *testing.T) {
 }
 
 func TestMonitorSetResponseTimeMetricSucceeds(t *testing.T) {
-	logger := zerolog.Nop()
-	m := NewMonitor(&logger)
+	m := NewMonitor()
 
 	labels := map[string]string{"operation": "test", "status": "0"}
 	m.SetResponseTimeMetric(labels, float64(10))

@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/url"
 	"os"
@@ -13,8 +14,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/rs/zerolog"
 
 	"github.com/bagechashu/gldap/internal/monitoring"
 	"github.com/bagechashu/gldap/pkg/config"
@@ -30,7 +29,6 @@ type ldapHandler struct {
 	backend  config.Backend
 	handlers HandlerWrapper
 	doPing   chan bool
-	log      *zerolog.Logger
 	lock     *sync.Mutex // for sessions and servers
 	sessions map[string]ldapSession
 	servers  []ldapBackend
@@ -71,7 +69,6 @@ func NewLdapHandler(opts ...Option) Handler {
 		handlers: options.Handlers,
 		sessions: make(map[string]ldapSession),
 		doPing:   make(chan bool),
-		log:      options.Logger,
 		helper:   options.Helper,
 		lock:     &ldaplock,
 		attm:     ldapattributematcher,
@@ -81,7 +78,7 @@ func NewLdapHandler(opts ...Option) Handler {
 	for _, ldapurl := range handler.backend.Servers {
 		l, err := parseURL(ldapurl)
 		if err != nil {
-			handler.log.Error().Err(err).Msg("could not parse url")
+			slog.Error("could not parse url", err)
 			os.Exit(1)
 		}
 		handler.servers = append(handler.servers, l)
@@ -102,7 +99,7 @@ func (h ldapHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (result ld
 		)
 	}()
 
-	h.log.Debug().Str("binddn", bindDN).Str("src", conn.RemoteAddr().String()).Msg("Bind request")
+	slog.Debug("Bind request", "binddn", bindDN, "src", conn.RemoteAddr().String())
 
 	//	if h.helper != nil {
 	if true {
@@ -144,7 +141,7 @@ func (h ldapHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (result ld
 		}
 
 		if !validotp {
-			h.log.Debug().Msg(fmt.Sprintf("Bind Error: invalid OTP token as %s from %s", bindDN, conn.RemoteAddr().String()))
+			slog.Debug(fmt.Sprintf("Bind Error: invalid OTP token as %s from %s", bindDN, conn.RemoteAddr().String()))
 			return ldap.LDAPResultInvalidCredentials, nil
 		}
 	}
@@ -153,16 +150,16 @@ func (h ldapHandler) Bind(bindDN, bindSimplePw string, conn net.Conn) (result ld
 	s, err := h.getSession(conn)
 	if err != nil {
 		stats.Frontend.Add("bind_ldapSession_errors", 1)
-		h.log.Debug().Str("binddn", bindDN).Str("src", conn.RemoteAddr().String()).Err(err).Msg("could not get session")
+		slog.Debug("could not get session", "binddn", bindDN, "src", conn.RemoteAddr().String(), err)
 		return ldap.LDAPResultOperationsError, err
 	}
 	if err := s.ldap.Bind(bindDN, bindSimplePw); err != nil {
 		stats.Frontend.Add("bind_errors", 1)
-		h.log.Debug().Str("binddn", bindDN).Str("src", conn.RemoteAddr().String()).Msg("invalid creds")
+		slog.Debug("invalid creds", "binddn", bindDN, "src", conn.RemoteAddr().String())
 		return ldap.LDAPResultInvalidCredentials, nil
 	}
 	stats.Frontend.Add("bind_successes", 1)
-	h.log.Debug().Str("binddn", bindDN).Str("src", conn.RemoteAddr().String()).Msg("bind success")
+	slog.Debug("bind success", "binddn", bindDN, "src", conn.RemoteAddr().String())
 	return ldap.LDAPResultSuccess, nil
 }
 
@@ -178,7 +175,7 @@ func (h ldapHandler) Search(boundDN string, searchReq ldap.SearchRequest, conn n
 	wantAttributes := true
 	wantTypesOnly := false
 
-	h.log.Debug().Str("binddn", boundDN).Str("src", conn.RemoteAddr().String()).Str("filter", searchReq.Filter).Msg("Search request")
+	slog.Debug("Search request", "binddn", boundDN, "src", conn.RemoteAddr().String(), "filter", searchReq.Filter)
 
 	// "1.1" has special meaning: it does what an empty attribute list would do
 	// if it didn't already mean "return all attributes"
@@ -212,19 +209,19 @@ func (h ldapHandler) Search(boundDN string, searchReq ldap.SearchRequest, conn n
 		searchReq.Controls,
 	)
 
-	h.log.Debug().Interface("request", search).Msg("Search request to backend")
+	slog.Debug("Search request to backend", "request", search)
 	sr, err := s.ldap.Search(search)
-	h.log.Debug().Interface("result", sr).Msg("Backend Search result")
+	slog.Debug("Backend Search result", "result", sr)
 
 	if !wantAttributes {
-		h.log.Debug().Str("type", "No attributes").Msg("AP: Search Info")
+		slog.Debug("AP: Search Info", "type", "No attributes")
 		for _, entry := range sr.Entries {
 			entry.Attributes = entry.Attributes[:0]
 		}
 	}
 
 	if wantTypesOnly {
-		h.log.Debug().Str("type", "Types only").Msg("AP: Search Info")
+		slog.Debug("AP: Search Info", "type", "Types only")
 		for _, entry := range sr.Entries {
 			for _, attribute := range entry.Attributes {
 				attribute.Values = attribute.Values[:0]
@@ -251,7 +248,7 @@ func (h ldapHandler) Search(boundDN string, searchReq ldap.SearchRequest, conn n
 	// 3-We were asked not to return values
 	// then we re-insert the correct values in there.
 	if searchReq.Scope == 0 && searchReq.BaseDN == "" {
-		h.log.Debug().Str("type", "Root search detected").Msg("AP: Search Info")
+		slog.Debug("AP: Search Info", "type", "Root search detected")
 	}
 
 	filters := h.buildReqAttributesList(searchReq.Filter, []string{})
@@ -280,16 +277,16 @@ func (h ldapHandler) Search(boundDN string, searchReq ldap.SearchRequest, conn n
 		Referrals: sr.Referrals,
 		Controls:  sr.Controls,
 	}
-	h.log.Debug().Interface("result", ssr).Msg("Frontend Search result")
+	slog.Debug("Frontend Search result", "result", ssr)
 	if err != nil {
 		e := err.(*ldap.Error)
-		h.log.Debug().Err(err).Msg("search Err")
+		slog.Error("search Err", err)
 		stats.Frontend.Add("search_errors", 1)
 		ssr.ResultCode = ldap.LDAPResultCode(e.ResultCode)
 		return ssr, err
 	}
 	stats.Frontend.Add("search_successes", 1)
-	h.log.Debug().Str("filter", search.Filter).Int("numentries", len(ssr.Entries)).Msg("AP: Search OK")
+	slog.Debug("AP: Search OK", "filter", search.Filter, "numentries", len(ssr.Entries))
 	return ssr, nil
 }
 
@@ -374,7 +371,7 @@ func (h ldapHandler) Close(boundDn string, conn net.Conn) error {
 func (h *ldapHandler) monitorServers() {
 	err := h.ping()
 	if err != nil {
-		h.log.Error().Err(err).Msg("could not ping server")
+		slog.Error("could not ping server", err)
 		os.Exit(1)
 		// TODO return error
 	}
@@ -382,18 +379,18 @@ func (h *ldapHandler) monitorServers() {
 		for {
 			select {
 			case <-h.doPing:
-				h.log.Warn().Msg("doPing requested due to server failure")
+				slog.Warn("doPing requested due to server failure")
 				err = h.ping()
 				if err != nil {
-					h.log.Error().Err(err).Msg("could not ping server")
+					slog.Error("could not ping server", err)
 					os.Exit(1)
 					// TODO return error
 				}
 			case <-time.NewTimer(60 * time.Second).C:
-				h.log.Warn().Msg("doPing after timeout")
+				slog.Warn("doPing after timeout")
 				err = h.ping()
 				if err != nil {
-					h.log.Error().Err(err).Msg("could not ping server")
+					slog.Error("could not ping server", err)
 					os.Exit(1)
 					// TODO return error
 				}
@@ -457,7 +454,7 @@ func (h ldapHandler) ping() error {
 		elapsed := time.Since(start)
 		h.lock.Lock()
 		if err != nil || l == nil {
-			h.log.Fatal().Str("hostname", s.Hostname).Int("port", s.Port).Err(err).Msg("server ping failed")
+			slog.Error("server ping failed", "hostname", s.Hostname, "port", s.Port, err)
 			h.servers[k].Ping = 0
 			h.servers[k].Status = Down
 		} else {
@@ -468,10 +465,10 @@ func (h ldapHandler) ping() error {
 		}
 		h.lock.Unlock()
 	}
-	h.log.Debug().Interface("servers", h.servers).Msg("Server health")
+	slog.Debug("Server health", "servers", h.servers)
 	b, err := json.Marshal(h.servers)
 	if err != nil {
-		h.log.Fatal().Err(err).Msg("error encoding tail data")
+		slog.Error("error encoding tail data", err)
 	}
 	stats.Backend.Set("servers", stats.Stringer(string(b)))
 	if !healthy {
@@ -496,7 +493,7 @@ func (h ldapHandler) getBestServer() (ldapBackend, error) {
 	if bestping == forever {
 		return ldapBackend{}, fmt.Errorf("no healthy servers found")
 	}
-	h.log.Debug().Interface("favorite", favorite).Msg("Best server")
+	slog.Debug("Best server", "favorite", favorite)
 	return favorite, nil
 }
 

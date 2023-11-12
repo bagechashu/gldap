@@ -2,16 +2,14 @@ package monitoring
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/rs/zerolog"
 )
 
 type Monitor struct {
 	responseTime *prometheus.HistogramVec
 	ldapMetric   *prometheus.GaugeVec
-
-	logger *zerolog.Logger
 }
 
 func (m *Monitor) SetResponseTimeMetric(tags map[string]string, value float64) error {
@@ -62,9 +60,9 @@ func (m *Monitor) registerHistograms() {
 		case nil:
 			return
 		case prometheus.AlreadyRegisteredError:
-			m.logger.Debug().Interface("metric", histogram).Msg("metric already registered")
+			slog.Debug("metric already registered", "metric", histogram)
 		default:
-			m.logger.Error().Interface("metric", histogram).Msg("metric could not be registered")
+			slog.Error("metric could not be registered", "metric", histogram)
 		}
 	}
 }
@@ -90,17 +88,15 @@ func (m *Monitor) registerGauges() {
 		case nil:
 			return
 		case prometheus.AlreadyRegisteredError:
-			m.logger.Debug().Interface("metric", gauge).Msg("metric already registered")
+			slog.Debug("metric already registered", "metric", gauge)
 		default:
-			m.logger.Error().Interface("metric", gauge).Msg("metric could not be registered")
+			slog.Error("metric could not be registered", "metric", gauge)
 		}
 	}
 }
 
-func NewMonitor(logger *zerolog.Logger) *Monitor {
+func NewMonitor() *Monitor {
 	m := new(Monitor)
-
-	m.logger = logger
 
 	m.registerHistograms()
 	m.registerGauges()
